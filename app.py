@@ -207,15 +207,10 @@ def require_login() -> None:
         return
 
     st.title("ログイン")
-    render_basic_auth_settings(
-        "login",
-        caption="Basic認証のID・パスワードを設定したうえでログインしてください。",
-        expand_when_missing=True,
-    )
 
     username, password = get_configured_auth_credentials()
     if not username or not password:
-        st.info("「Basic認証の設定」でIDとパスワードを入力・保存してください。")
+        st.info("ログイン情報が未設定です。管理者に連絡してください。")
         st.stop()
         return
 
