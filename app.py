@@ -148,21 +148,12 @@ def get_secret_auth_credentials() -> Tuple[Optional[str], Optional[str]]:
 
 
 def get_configured_auth_credentials() -> Tuple[str, str]:
-    """Return the Basic auth credentials from secrets, environment variables, or defaults."""
+    """Return the Basic auth credentials from Streamlit secrets or defaults."""
     secret_username, secret_password = get_secret_auth_credentials()
     if secret_username and secret_password:
         return secret_username, secret_password
 
-    env_username = _normalize_credential(
-        os.getenv("APP_AUTH_USERNAME") or os.getenv("STREAMLIT_AUTH_USERNAME")
-    )
-    env_password = _normalize_credential(
-        os.getenv("APP_AUTH_PASSWORD") or os.getenv("STREAMLIT_AUTH_PASSWORD")
-    )
-
-    username = env_username or "admin"
-    password = env_password or "pressrelease"
-    return username, password
+    return "mezamashi", "mezamashi"
 
 
 def require_login() -> None:
