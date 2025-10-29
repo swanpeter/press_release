@@ -172,13 +172,11 @@ def render_basic_auth_settings(
             username_input = st.text_input(
                 "Basic 認証 ID",
                 value=current_username or "",
-                key=f"{form_prefix}_auth_username",
             )
             password_input = st.text_input(
                 "Basic 認証 パスワード",
                 value=current_password or "",
                 type="password",
-                key=f"{form_prefix}_auth_password",
             )
             submit_col, clear_col = st.columns(2)
             submitted = submit_col.form_submit_button("設定を保存")
@@ -190,17 +188,12 @@ def render_basic_auth_settings(
             st.session_state["auth_username"] = normalized_username
             st.session_state["auth_password"] = normalized_password
             st.session_state["authenticated"] = False
-            # keep widget values in sync on rerun
-            st.session_state[f"{form_prefix}_auth_username"] = normalized_username or ""
-            st.session_state[f"{form_prefix}_auth_password"] = normalized_password or ""
             st.success("設定を保存しました。")
             safe_rerun()
         elif cleared:
             st.session_state["auth_username"] = None
             st.session_state["auth_password"] = None
             st.session_state["authenticated"] = False
-            st.session_state[f"{form_prefix}_auth_username"] = ""
-            st.session_state[f"{form_prefix}_auth_password"] = ""
             st.info("設定をクリアしました。")
             safe_rerun()
 
