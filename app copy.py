@@ -4,7 +4,7 @@ import uuid
 from contextlib import nullcontext
 from io import BytesIO
 import re
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 
 import streamlit as st
 
@@ -37,11 +37,6 @@ try:
     from PIL import Image
 except ImportError:  # pragma: no cover - optional dependency
     Image = None
-
-try:
-    from streamlit.runtime.secrets import StreamlitSecretNotFoundError
-except ImportError:  # pragma: no cover
-    StreamlitSecretNotFoundError = Exception  # type: ignore
 
 BASE_PROMPT = """あなたは「めざましメディア」の編集記者です。\n以下の入力データをもとに、めざましメディア風のリリース記事を作成してください。\n\n## 出力ルール\n- リード文 → 小見出し(h2) → 本文詳細 → コメント/反響 → 公式情報ボックス → まとめ\n- 句読点はシンプルに。「！」や「…」も自然な範囲で使用\n- 写真キャプションは「◯◯する△△」の形式で具体的に\n- 読者の感情を引きつける「かわいい」「注目」「大反響」などのワードを適度に盛り込む\n- 最後は「ぜひチェックしてみてください」「お見逃しなく！」などで締める\n\n---\n\n## 入力データ\n- 【タイトル】：\n- 【主役（人物/キャラクター/ブランドなど）】：\n- 【発売日/公開日/開始日】：\n- 【開催場所/販売場所】：\n- 【イベント/商品/作品の特徴】：\n- 【コメントやSNS反応】：\n- 【写真リスト（キャプション用）】：\n- 【公式情報（価格・日程・注意事項など）】：\n\n---\n\n## 記事構造（生成する文章の型）\n\n### 1. リード文（冒頭パラグラフ）\n- 誰が・何を・いつ行うかを端的に\n- 必要に応じてSNSや話題性を一文追加\n\n### 2. 小見出し（h2）\n- 注目ポイントをキャッチーに表現\n  （例：「◯◯あふれる先行カット公開」「かわいすぎる◯◯が新登場！」）\n\n### 3. 本文詳細\n- イベントや商品の背景、ラインナップ、見どころを小分けに説明\n- 写真とキャプションを数点挿入（文章の中で「◯◯する△△」の形で）\n\n### 4. コメント・反響\n- 本人や関係者のコメントを引用\n- SNSの声（例：「かわいすぎる！」「絶対欲しい」など）を紹介\n\n### 5. 公式情報（ボックス形式）\n- 「■販売期間」「■価格」「■場所」などを箇条書きで明記\n\n### 6. まとめ\n- 「ぜひチェックしてみてください」「お見逃しなく！」などで読者を誘導\n\n---\n\n## 出力例フォーマット（イメージ）\n\n<h2>◯◯◯◯</h2>\n\n<p>リード文…</p>\n\n<h2>小見出し</h2>\n<p>詳細説明…</p>\n<figcaption>キャプション例：笑顔を見せる◯◯</figcaption>\n\n<h2>コメント・反響</h2>\n<p>◯◯さんのコメント「……」</p>\n<p>SNSでは「……」といった声も。</p>\n\n<div class=\"mezamashi-box\">\n<p>■発売日：◯月◯日<br>\n■価格：◯円<br>\n■場所：◯◯</p>\n</div>\n\n<p>ぜひチェックしてみてください！</p>"""
 
@@ -104,141 +99,6 @@ MODEL_OPTIONS = {
     ],
 }
 DEFAULT_MODEL_LABEL = "Gemini 2.5 Pro"
-
-
-def safe_rerun() -> None:
-    """Trigger a Streamlit rerun, compatible with older versions."""
-    try:
-        st.rerun()
-    except AttributeError:  # pragma: no cover - older Streamlit versions
-        st.experimental_rerun()
-
-
-def _normalize_credential(value: Optional[str]) -> Optional[str]:
-    if isinstance(value, str):
-        stripped = value.strip()
-        if stripped:
-            return stripped
-    return None
-
-
-def get_secret_auth_credentials() -> Tuple[Optional[str], Optional[str]]:
-    try:
-        secrets_obj = st.secrets
-    except StreamlitSecretNotFoundError:
-        return None, None
-    except Exception:  # pragma: no cover - defensive
-        return None, None
-
-    auth_section: Optional[Dict[str, Any]] = None
-    if isinstance(secrets_obj, dict):
-        auth_section = secrets_obj.get("auth")
-    else:
-        # Streamlit's Secrets object behaves like a mapping.
-        auth_section = getattr(secrets_obj, "get", lambda _key, _default=None: None)("auth")
-
-    if not isinstance(auth_section, dict):
-        return None, None
-
-    username = auth_section.get("username") or auth_section.get("id")
-    password = auth_section.get("password") or auth_section.get("pass")
-    return _normalize_credential(str(username)) if username is not None else None, _normalize_credential(
-        str(password)
-    ) if password is not None else None
-
-
-def get_configured_auth_credentials() -> Tuple[Optional[str], Optional[str]]:
-    """Return the currently configured Basic auth credentials."""
-    session_username = _normalize_credential(st.session_state.get("auth_username"))
-    session_password = _normalize_credential(st.session_state.get("auth_password"))
-    if session_username and session_password:
-        return session_username, session_password
-    return get_secret_auth_credentials()
-
-
-def render_basic_auth_settings(
-    form_prefix: str,
-    *,
-    caption: Optional[str] = "Basic認証のID・パスワードを設定してください。空欄の場合は未設定として扱われます。",
-    expand_when_missing: bool = True,
-) -> None:
-    current_username, current_password = get_configured_auth_credentials()
-    expanded = expand_when_missing and not (current_username and current_password)
-
-    with st.expander("Basic認証の設定", expanded=expanded):
-        if caption:
-            st.caption(caption)
-        with st.form(f"{form_prefix}_auth_form", clear_on_submit=False):
-            username_input = st.text_input(
-                "Basic 認証 ID",
-                value=current_username or "",
-                key=f"{form_prefix}_auth_username",
-            )
-            password_input = st.text_input(
-                "Basic 認証 パスワード",
-                value=current_password or "",
-                type="password",
-                key=f"{form_prefix}_auth_password",
-            )
-            submit_col, clear_col = st.columns(2)
-            submitted = submit_col.form_submit_button("設定を保存")
-            cleared = clear_col.form_submit_button("クリア")
-
-        if submitted:
-            normalized_username = _normalize_credential(username_input)
-            normalized_password = _normalize_credential(password_input)
-            st.session_state["auth_username"] = normalized_username
-            st.session_state["auth_password"] = normalized_password
-            st.session_state["authenticated"] = False
-            # keep widget values in sync on rerun
-            st.session_state[f"{form_prefix}_auth_username"] = normalized_username or ""
-            st.session_state[f"{form_prefix}_auth_password"] = normalized_password or ""
-            st.success("設定を保存しました。")
-            safe_rerun()
-        elif cleared:
-            st.session_state["auth_username"] = None
-            st.session_state["auth_password"] = None
-            st.session_state["authenticated"] = False
-            st.session_state[f"{form_prefix}_auth_username"] = ""
-            st.session_state[f"{form_prefix}_auth_password"] = ""
-            st.info("設定をクリアしました。")
-            safe_rerun()
-
-
-def require_login() -> None:
-    """Render a simple login form and block the rest of the app until authenticated."""
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
-
-    if st.session_state["authenticated"]:
-        return
-
-    st.title("ログイン")
-    render_basic_auth_settings(
-        "login",
-        caption="Basic認証のID・パスワードを設定したうえでログインしてください。",
-        expand_when_missing=True,
-    )
-
-    username, password = get_configured_auth_credentials()
-    if not username or not password:
-        st.info("「Basic認証の設定」でIDとパスワードを入力・保存してください。")
-        st.stop()
-        return
-
-    with st.form("login_form", clear_on_submit=False):
-        input_username = st.text_input("ID")
-        input_password = st.text_input("PASS", type="password")
-        submitted = st.form_submit_button("ログイン")
-
-    if submitted:
-        if input_username == username and input_password == password:
-            st.session_state["authenticated"] = True
-            st.success("ログインしました。")
-            safe_rerun()
-            return
-        st.error("IDまたはPASSが正しくありません。")
-    st.stop()
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -571,7 +431,6 @@ def generate_press_release(model_names: Iterable[str], prompt: str) -> str:
 
 def main():
     st.set_page_config(page_title="めざましメディア・プレスリリース生成", page_icon="📰", layout="wide")
-    require_login()
     st.title("めざましメディア プレスリリース生成ツール")
     st.write(
         "アップロードした資料と指示をもとに、Gemini がプレスリリース案を作成します。"
@@ -599,13 +458,6 @@ def main():
 
         query_params = st.query_params
         is_admin_mode = query_params.get("admin") == "1"
-
-        if is_admin_mode:
-            render_basic_auth_settings(
-                "sidebar",
-                caption="Basic認証のID・パスワードを更新できます。変更すると再ログインが必要です。",
-                expand_when_missing=False,
-            )
 
         api_key = st.session_state.get("gemini_api_key", "")
         if is_admin_mode:
