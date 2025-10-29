@@ -147,55 +147,22 @@ def get_secret_auth_credentials() -> Tuple[Optional[str], Optional[str]]:
     ) if password is not None else None
 
 
-def get_configured_auth_credentials() -> Tuple[Optional[str], Optional[str]]:
-    """Return the currently configured Basic auth credentials."""
-    session_username = _normalize_credential(st.session_state.get("auth_username"))
-    session_password = _normalize_credential(st.session_state.get("auth_password"))
-    if session_username and session_password:
-        return session_username, session_password
-    return get_secret_auth_credentials()
+def get_configured_auth_credentials() -> Tuple[str, str]:
+    """Return the Basic auth credentials from secrets, environment variables, or defaults."""
+    secret_username, secret_password = get_secret_auth_credentials()
+    if secret_username and secret_password:
+        return secret_username, secret_password
 
+    env_username = _normalize_credential(
+        os.getenv("APP_AUTH_USERNAME") or os.getenv("STREAMLIT_AUTH_USERNAME")
+    )
+    env_password = _normalize_credential(
+        os.getenv("APP_AUTH_PASSWORD") or os.getenv("STREAMLIT_AUTH_PASSWORD")
+    )
 
-def render_basic_auth_settings(
-    form_prefix: str,
-    *,
-    caption: Optional[str] = "Basic認証のID・パスワードを設定してください。空欄の場合は未設定として扱われます。",
-    expand_when_missing: bool = True,
-) -> None:
-    current_username, current_password = get_configured_auth_credentials()
-    expanded = expand_when_missing and not (current_username and current_password)
-
-    with st.expander("Basic認証の設定", expanded=expanded):
-        if caption:
-            st.caption(caption)
-        with st.form(f"{form_prefix}_auth_form", clear_on_submit=False):
-            username_input = st.text_input(
-                "Basic 認証 ID",
-                value=current_username or "",
-            )
-            password_input = st.text_input(
-                "Basic 認証 パスワード",
-                value=current_password or "",
-                type="password",
-            )
-            submit_col, clear_col = st.columns(2)
-            submitted = submit_col.form_submit_button("設定を保存")
-            cleared = clear_col.form_submit_button("クリア")
-
-        if submitted:
-            normalized_username = _normalize_credential(username_input)
-            normalized_password = _normalize_credential(password_input)
-            st.session_state["auth_username"] = normalized_username
-            st.session_state["auth_password"] = normalized_password
-            st.session_state["authenticated"] = False
-            st.success("設定を保存しました。")
-            safe_rerun()
-        elif cleared:
-            st.session_state["auth_username"] = None
-            st.session_state["auth_password"] = None
-            st.session_state["authenticated"] = False
-            st.info("設定をクリアしました。")
-            safe_rerun()
+    username = env_username or "admin"
+    password = env_password or "pressrelease"
+    return username, password
 
 
 def require_login() -> None:
@@ -587,13 +554,6 @@ def main():
 
         query_params = st.query_params
         is_admin_mode = query_params.get("admin") == "1"
-
-        if is_admin_mode:
-            render_basic_auth_settings(
-                "sidebar",
-                caption="Basic認証のID・パスワードを更新できます。変更すると再ログインが必要です。",
-                expand_when_missing=False,
-            )
 
         api_key = st.session_state.get("gemini_api_key", "")
         if is_admin_mode:
