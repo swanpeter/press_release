@@ -518,7 +518,7 @@ def generate_press_release(model_names: Iterable[str], prompt: str) -> str:
 
 
 def main():
-    st.set_page_config(page_title="めざましメディア・プレスリリース生成", page_icon="📰", layout="wide")
+    st.set_page_config(page_title="MMPRGEN", page_icon="📰", layout="wide")
     require_login()
     st.title("めざましメディア プレスリリース生成ツール")
     st.write(
